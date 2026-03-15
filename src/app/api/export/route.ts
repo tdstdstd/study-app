@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { markdownExporter } from "@/lib/export/markdown";
 import type { ExportOptions, ExportSession, ExportStatsData } from "@/lib/export/types";
-import { formatDate } from "@/lib/utils";
+
+function formatDate(date: Date): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(date));
+}
 
 export async function GET(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = session.user.id;
 
   const url = req.nextUrl.searchParams;
   const format = url.get("format") || "md";
@@ -19,10 +31,9 @@ export async function GET(req: NextRequest) {
 
   const subjectIds = subjectIdsRaw ? subjectIdsRaw.split(",") : undefined;
 
-  // Fetch sessions
   const sessions = await prisma.session.findMany({
     where: {
-      userId: user.id,
+      userId: userId,
       status: "COMPLETED",
       ...(subjectIds ? { subjectId: { in: subjectIds } } : {}),
       ...(dateFrom || dateTo
@@ -59,12 +70,12 @@ export async function GET(req: NextRequest) {
   }
 
   const profile = await prisma.user.findUnique({
-    where: { id: user.id },
+    where: { id: userId },
     select: { name: true },
   });
 
   const options: ExportOptions = {
-    format: format as any,
+    format: format as "md" | "pdf",
     sessions: exportSessions,
     stats,
     includeNotes,
@@ -81,6 +92,5 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Для PDF — возвращаем JSON для клиентской генерации
   return NextResponse.json(options);
 }
