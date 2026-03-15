@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String?
+  avatarUrl     String?
+  theme         String    @default("dark")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  subjects       Subject[]
+  sessions       Session[]
+  customStatuses CustomStatus[]
+  accounts       Account[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  color       String   @default("#6366f1")
+  icon        String   @default("book")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions Session[]
+
+  @@map("subjects")
+}
+
+model Session {
+  id              String        @id @default(cuid())
+  userId          String
+  subjectId       String
+  startTime       DateTime
+  endTime         DateTime?
+  duration        Int?
+  totalPauseTime  Int           @default(0)
+  status          SessionStatus @default(ACTIVE)
+  note            String?
+  imageUrl        String?
+  quoteText       String?
+  createdAt       DateTime      @default(now())
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  statusLogs SessionStatusLog[]
+  pauseLogs  SessionPauseLog[]
+
+  @@index([userId, createdAt])
+  @@index([duration])
+  @@map("sessions")
+}
+
+enum SessionStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model SessionStatusLog {
+  id        String   @id @default(cuid())
+  sessionId String
+  label     String
+  timestamp DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_status_logs")
+}
+
+model SessionPauseLog {
+  id        String    @id @default(cuid())
+  sessionId String
+  pausedAt  DateTime
+  resumedAt DateTime?
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_pause_logs")
+}
+
+model CustomStatus {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String
+  emoji     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("custom_statuses")
+}
+
+model Quote {
+  id     String  @id @default(cuid())
+  text   String
+  author String?
+
+  @@map("quotes")
+}
